@@ -1,0 +1,974 @@
+---
+title: "Notes"
+output: html_notebook
+---
+09/11/24
+--- unit 1 --- 
+the name of the function f(x) is f 
+
+find the height of a launched object after t seconds
+```{r}
+# we already know the initial height and launch angle, assume that theta = pi/2
+# and the object is launched straight up. then vy = v0, and the only required 
+# arg is time. 
+y0 = 71  #cm 
+GRAV = -980.665  #cm/s^2 
+v0 = 350  # m/s
+get_height <- function(t){
+  # t: time elapsed
+  # v0: initial velocity
+  
+  height <- y0 + v0*t + (1/2)*GRAV*t^2
+  return(height)
+}
+
+get_height(1/2)
+```
+how to find max height, and time when height is 0? 
+use a for loop to get the height at every time t for a range of times
+then see what the time is
+
+--- THE EASY SOLUTION: MAKE A PLOT ---
+need:
+function with a set of times, 
+plotting command, 
+
+```{r}
+t_array <- seq(from = 0, to = 2, by = 0.01)
+
+#-- make plot 
+plot(
+ x = t_array,
+ y = get_height( t = t_array), 
+ type = 'l'
+)
+```
+ 
+--- Unit 2 --- 
+09/18/24
+
+each piece of information is called a case which contain attributes. Those attributes
+are assigned to a given value. We have a name to identify each case, the information 
+in the case, and the information in the person. 
+
+```{r}
+id <- c('person1', 'person2', 'person2', 'person4', 'person5')
+height <- c(71, 65, 74, 68, 67)
+```
+you may have to clean data and strip it into a numeric form. 
+
+data frame is a type of data structure in R that connects vectors of data using the notion of cases.
+```{r}
+stat184_heights <- data.frame(
+  id = id,
+  height_in = height
+)
+
+stat184_heights
+```
+--- loading data in R --- 
+```{r}
+oreo_data <- read.csv('C:/Users/pb601/OneDrive/Desktop/FA24 STAT184/OreoData1.csv')
+oreo_data2 <- read.table(
+  file = 'https://raw.githubusercontent.com/neilhatfield/STAT461/main/dataFiles/classDemoOreo.dat',
+  header = TRUE,
+  sep = ","
+)
+oreo_data3 <- load(file = "C:/Users/pb601/OneDrive/Desktop/FA24 STAT184/OreoDataSets.RData")
+
+#installing and using libraries
+library(devtools)
+install_github('mdbeckman/dcData')
+```
+
+can run `library(package_name)` and every data set in that package is opened through `data(dataset_name)`
+```{r}
+library(dcData)
+data('BabyNames')
+```
+
+Reading other data files
+
+xsl, xsls : {readxl} {openxsls}
+
+
+09/20/24
+
+```{r}
+data <- read.table(
+  file = 'https://raw.github.com/neilhatfield/STAT461/master/dataFiles/classDemoOreo.dat',
+  header = TRUE,
+  sep = ","
+)
+str(data)
+View(data)
+```
+`data$Filling.Mass` or `data$Type` yields a vector 
+
+R is 1 indixed. We can use an index to select data. index is row-major
+
+`data$Filling.Mass[4]` returns the 4th observation in the Filling.Mass column.
+`data[i][j]`  returns the ith row and jth column
+
+can slice too. `data[i:j][k]` return the ith through jth observations in the kth column
+`data[,2]` returns all rows in the 2nd column. `data[12:15,]` returns the ith through jth rows in all columns
+
+```{r}
+# Change a single item in the data
+# you can also index by column name in a dataframe
+data[60,'Type'] <- "Mega"
+```
+
+-- Tidy Data -- 
+
+Not every data set is easy to work with in R. We have to tidy the data. each row is a unique case,
+and each column represents the variable value for a given case
+
+---
+09/27/21
+
+Piping- chaining data verbs is like chaining functions in math. start with this, do this, then that, then another thing.
+
+two different piping approaches: tidyverse, first implementation. you need to load packages like {dplyr} or {tidyr}, or just load {tidyr}. use it like 
+
+`x%>%g%>%f`-- x piping into g into f = like f(g(x)).
+
+base R implementation: use `|>`. typically, you would use %>%. you can mix, but be consistent in your coding style.
+
+
+data wrangling in code: make plan, translate it into code, then run the code. For this example, we use `hypxoia.csv`.
+goal: tidy the hypoxia data
+need: what defines a case, the data file, functions to tidy the data: rename, pivot (wider, longer), separating, recoding/parsing/filling NA values, mutating, variable to store the data, selecting data.
+
+steps-- 
+0: load data and packages
+1: fix the names
+2: fix atitude values.
+3: remove extra cols/rows
+4: reshape the data
+5: handle NaNs 
+
+
+```{r}
+# read data twice, to sep headers
+hypoxia_headers <- read.table(file = "C:/Users/pb601/OneDrive/Desktop/FA24 STAT184/hypoxia.csv", 
+                           header = FALSE, 
+                           sep = ',',
+                           nrows = 2)
+View(hypoxia_headers)
+
+hypoxia_raw <- read.table(file = "C:/Users/pb601/OneDrive/Desktop/FA24 STAT184/hypoxia.csv",
+                          header = FALSE,
+                          sep = ',',
+                          skip = 2)
+View(hypoxia_raw)
+
+# load packages
+library('tidyverse')
+# fix altitude
+modified_hypoxia <- hypoxia_raw %>%
+  rename(
+    junk = V1,
+    altitude = V2,
+    air_pressure_mmhg = V3,
+    pressure.o2 = V4, 
+    lung_p_o2.21 = V5,
+    blood_sat_o2.21 = V6,
+    lung_p_co2.21 = V7,
+    lung_p_o2.100 = V8,
+    blood_sat_02.100 = V9,
+    lung_p_co2.100 = V10
+  ) %>%
+  dplyr::select(-junk) %>% # minus sign removes the column
+  mutate(
+    altitude = case_match(  # allows us to selectively apply transformation
+      altitude,
+      'Sea level' ~ '0k/0k',  # turn into format that is most convenient for later
+      .default = altitude
+    )
+  ) %>%
+  separate_wider_delim(
+    cols = altitude,
+    delim = '/',
+    names = c('alt_feet', 'alt_meter')
+  ) %>%
+  mutate(
+    alt_feet = readr::parse_number(alt_feet) * 1000,
+    alt_meter = readr::parse_number(alt_meter) * 1000
+  ) %>%  # reshaping to get to the original 12 cases, so we should pivot longer
+  pivot_longer(
+    cols = lung_p_o2.21:lung_p_co2.100,  # the colon is inclusive
+    names_to = 'key',
+    values_to = "pressure_reading"
+  ) %>%
+  separate_wider_delim(
+    cols = key,
+    delim = '.',
+    names = c("reading", 'o2_percent')
+  ) %>%
+  pivot_wider(
+    names_from = reading,
+    values_from = pressure_reading,
+  ) %>%
+  mutate(
+    o2_percent = readr::parse_number(o2_percent)
+    )
+```
+--- combining data stuctures--- 
+10/02/24 
+
+two ways to comibne data frames.
+`bind_*` and `*_join`
+
+`bind_rows`will add rows from second dataframe to the first dataframe. This will match columns by name and fill missing values with a. 
+
+`bind_cols` will add the cols from the second dataframe by ROW POSITION, not by case. If the rows are not in the same order and not exactly how you want them to be, DO NOT USE
+
+-- join family of functions
+
+* is what cases we keep. 
+`left_join` returns only cases in df1 with new columns froom df2
+`right_join` returns only cases in df2 with new colsumns from df1
+`inner_join` returns only cases in both data frames
+`full_join` returns every case 
+
+`*_join(x = left df, y = right df, by = {how to join dataframes, the most important argument})`
+use a helper function `join_by`  
+
+equality join: `join_by(left_c1 == right_c3)`. maps them by value and merge (one to one mapping)
+inequality join: one to many mapping `join_by(left_c1 < right_c3)`. or use rolling `join_by(closest(left_c1 < right_c3))`
+
+--- advanced data wrangling activity 06 --- 
+
+```{r}
+library(tidyr)
+library(dplyr)
+library(dcData)
+data(Minneapolis2013)
+```
+```{r}
+Minneapolis2013 %>%
+  group_by(Precinct) %>%
+  summarise(sum = n()) %>%
+  arrange(desc(sum))
+```
+
+--- cleaning the galton data --- 
+```{r}
+library(tidyverse)
+galton_data <- read.table(
+  file = "C:/Users/pb601/OneDrive/Desktop/FA24 STAT184/galton_data_to_clean.csv", 
+  sep = ',',
+  skip = 1
+  ) 
+
+galton_clean1 <- galton_data %>%   # get the data without headers so i can make my ownm
+  rename(
+    family = V1,
+    father_height = V2, 
+    mother_height = V3,
+    sons_heights = V4,
+    daughters_heights = V5
+  ) %>%
+  separate(  # use the base r function separate
+    `sons_heights`,
+    into = c('son1','son2','son3'), #split into 3 cols (max of 3 heights for a family)
+    fill = 'right',  # fill the right columns (with na values)
+    sep = ','
+  ) %>%  # do the same for daughters, there are a max of 3 in each family
+  separate(  # use the base r function separate
+    `daughters_heights`,
+    into = c('daughter1','daughter2','daughter3'), # split into 3 cols (max of 3 heights for a family)
+    fill = 'right',  # fill the right columns (with na values)
+    sep = ','
+  ) %>%
+  mutate(  # add 60 to each height, parse the numbers first for the son and daughter columns because of N/A values.
+   father_height = father_height + 60, 
+   mother_height = mother_height + 60,
+   son1 = readr::parse_number(son1) + 60,
+   son2 = readr::parse_number(son2) + 60,
+   son3 = readr::parse_number(son3) + 60, 
+   daughter1 = readr::parse_number(daughter1) + 60,
+   daughter2 = readr::parse_number(daughter2) + 60,
+   daughter3 = readr::parse_number(daughter3) + 60
+  )
+```
+cleaning the data 2nd way
+```{r}
+galton_clean2 <- galton_data %>%   # get the data without headers so i can make my ownm
+  rename(
+    family = V1,
+    father_height = V2, 
+    mother_height = V3,
+    sons_heights = V4,
+    daughters_heights = V5
+  ) %>%
+  pivot_longer(
+    cols = c(sons_heights, daughters_heights),
+    names_to = c('relation'), # relation is if they are a son or daughter
+    values_to = 'height',  # this will measure their height
+  ) %>%  #separate the row column by commas
+  separate_rows(
+    height,
+    sep = ','
+    ) %>%
+  mutate(
+    father_height = father_height + 60,
+    mother_height = mother_height + 60,
+    height = readr::parse_number(height) + 60
+    )
+```
+cleaning 3rd way
+```{r}
+
+galton_clean3 <- galton_data %>%
+  rename(
+    family = V1,
+    father_height = V2, 
+    mother_height = V3,
+    sons_heights = V4,
+    daughters_heights = V5
+  ) %>%
+  mutate(
+    father_height = as.character(father_height), # change both to char so it works well with the sons,daughter heights because turning them into numbers gets rid of the remaining entries
+    mother_height = as.character(mother_height)
+  ) %>%
+  pivot_longer(
+    cols = c(sons_heights, daughters_heights, father_height, mother_height),
+    names_to = 'relation', # relation is their role in the family
+    values_to = 'height',  # this will measure their height
+  ) %>% 
+  separate_rows(
+    height,
+    sep = ','
+  ) %>%
+  mutate(
+    height = readr::parse_number(height) + 60
+  )
+```
+
+10/04/24 -- Scraping data from the web. 
+We are going to work with data from psu football players. We will get them from espn and gopsusports.
+we wrangle data so we can gain insight into the underlying information. if data is not wrangled well, we gain bad information from the data. to build a dataviz, we need data. Sometimes the data is nice- other times we have to search data from other sources. we use a package known as `{rvest}` <-- main package for web scraping. What we read is an out dated recommendation.
+
+2 things to think about
+1. the ethics 
+2. is the data static or dynamic
+
+3 main functions `read_html`, `html_elements (or html_element) `, `html_table`
+`read_html` allows R to pull data from a web page provided the page is accessible AND static
+dynamic pages (the source code is short). Advertisements are dynamic and injected by the server.
+
+data usually comes raw and have to process it.
+`html_elements` - grabs all items from the page. Add in css selector or add XPath expression to get XML data.
+if you know exactly what you want use `html_elements`.
+`html_table` parses the data and converts it into tibble format mimicking what appears online as best as can. 
+with the exception of `html_table`, they all return list objects.
+
+ESPN:  https://www.espn.com/college-football/team/stats/_/id/213/penn-state-nittany-lions
+PSU Roster: https://gopsusports.com/sports/football/roster?view=table
+
+plan: go on the pages and look for table elements. We will have to join the tables some how and then wrangle the data.
+1. load packages
+2. get rushing data
+  A read espn page
+  B select the required elements
+  C construct tables
+  D identify the elements we need
+  E clean data
+3. get rushing data
+  A get gopsusports page
+  B select the required elements
+  C construct tables
+  D identify the elements we need
+  E clean data
+  
+4. Combine data frames
+```{r, message = FALSE}
+install.packages('rvest')
+library(rvest)
+library(tidyverse)
+```
+
+-- the bulk of the work -- 
+```{r}
+espn_raw <- read_html("https://www.espn.com/college-football/team/stats/_/id/213/penn-state-nittany-lions") %>%
+  html_elements(css = 'table') %>%
+  html_table()
+rushing_data_raw <- bind_cols(espn_raw[[3]], espn_raw[[4]])
+```
+```{r}
+
+# scraping the psu roster page
+
+psu_roster <- read_html("https://gopsusports.com/sports/football/roster?view=table") %>%
+  html_elements(css = 'table') %>%
+  html_table()
+roster_table_raw <-  psu_roster[[1]]
+```
+```{r}
+# cleaning the rushing data. 
+# 1. delete total row
+# 2. separate name and position
+# 3. rename cols
+# 4. convert to numeric
+
+rushing_data_clean <- rushing_data_raw %>%
+  filter(
+    Name != 'Total'
+    ) %>%
+  separate_wider_delim(
+    cols = Name,
+    delim = " ",
+    names = c('first', 'last', 'position'), 
+    too_many = 'merge'
+  ) %>%
+  separate_wider_delim(
+    cols = position,
+    delim = ' ',
+    names = c('suffix', 'position'),
+    too_few = 'align_end'
+  ) %>%
+  unite(
+    col = 'name',
+    first,
+    last, 
+    suffix,
+    sep = " ",
+    na.rm = TRUE
+  ) %>%
+  rename(
+    rushing_attempts = CAR,
+    total_yards = YDS,
+    average_rush = AVG,
+    long_rushing = LNG,
+    touchdowns = TD
+  ) %>%
+  mutate(
+    total_yards = as.numeric(total_yards)
+  )
+
+roster_table_clean <- roster_table_raw %>%
+  dplyr::select(`#`, Name, Position, Weight) %>%
+  rename(
+    number = `#`,
+    name = Name,
+    position = Position,
+    weight = Weight
+  ) %>%
+  mutate(
+    number = paste0('# ',number),
+    weight = readr::parse_number(weight),
+    name = str_squish(name)
+    )
+
+psu_rushing_data <- left_join(
+  x = rushing_data_clean,
+  y = roster_table_clean,
+  by = join_by(name == name, position == position)
+)
+```
+
+
+--- unit 3 --- 
+10/09/24
+
+two different approaches to statistical work. EDA and CDA. Exploratory and Confirmatory data analysis.
+exploratory- you dont know what youre looking for, want to find something new. general: Whats happening, whats going on
+confirmatory- you know what youre looking for, want to find data to support it. specific: does X affect Y?
+
+in EDA, we want to generate hypotheses, analyses conducted ad hoc
+in CDA, we want to test hypotheses, analysis conducted ex ante (determined what we want to do before we get the data, choose decision critera). preventing data hacking
+
+the general analysis tools are the same, what changes is HOW you use them. 
+
+EDA is the detective work, CDA is the trial (analogy to criminal process)
+You must use two different sets of data for EDA and CDA
+
+---
+5 core beliefs in EDA
+1. You construct your own understanding of data.
+2. Data visualizations play a central and vital role; a picture is worth a thousand words, but which ones? 
+3. Model building and hypothesis genration is an iterative process. 
+4. Using robust, resistant, smooth, and have breadth
+5. A disposition of skepticism, flexibility, and statistical ecumenism for methods used. flexibility- meet the data where the data is. 
+
+this idea of EDA is best helped with a data narrative or story. We have to be aware of our own internal biases when writing the story. 
+3 main parts in a story: descriptive/incisive stats, dataviz, and data narratives.
+
+we cant present the data as part of the narrative because it can be overwhelming. Statistics are ways to express information in concise ways. 
+What is a statistic: A statistic is a function of data that provides the measure of an attribute of out collection that is free from all parameters. (mean, variance, sd, t-stat, z-stat, etc)
+
+the count statistic measures the size of the data
+the mean statistic measures the mean of an attribute of data (etc)
+
+```{r}
+# different way to do it
+# galton_person %>%
+#   dplyr::select(height) %>%
+#   summarize(size = n())
+```
+To use a statistic coherently, you need a data collection, an attribute of the collection you want a measurement of, an appropriate function that measures your target attribute, and a meaningful interpretation of the output you get. 
+A statistic is used descriptively if we use it to help us summarize our data. We say that is it used incisively if we use it to help us think analytically and critically about the context. A statistics is inferential if we use that statistic to help us learn something about the general population from which the sample derives.
+
+EXAMPLES OF STATISTICS
+mean
+median
+count
+sd
+range
+iqr
+quantiles
+max
+min
+var
+expected value - not actually a statistic
+probability - not actually a statistic
+p-val - not actually a statistic
+degrees of freedom
+chi sq score
+t score
+z score
+f score
+correlation
+R^2
+
+--- cleaning the armed forces data- activity 6 --- 
+
+```{r}
+# Load packages ----
+library(googlesheets4)
+library(tidyverse)
+library(dplyr)
+
+# Load data ----
+gs4_deauth()
+armed_forces_raw <- read_sheet(
+  ss = 'https://docs.google.com/spreadsheets/d/1cn4i0-ymB1ZytWXCwsJiq6fZ9PhGLUvbMBHlzqG4bwo/edit?gid=597536282#gid=597536282',
+  skip = 1  # skip the first row so we can write our own column names that aren't merged 
+)
+
+# clean data. sort by collection of soldiers. dont worry about having a row for every single person
+# plan is the following: 
+# start by naming the removed rows. should go 'branch, branch, total, branch branch total... etc etc'
+# check if the N/A values for air and space force come as N/A or in character forms. 
+# delete total cols. 
+# delete the total rows. delete the row that says "Source: ..."
+# make a new column for gender and branch of military
+# also a colun for the pay grade- can rename them to the official rank name rather than the two letter rank
+
+armed_forces_clean <- armed_forces_raw %>%
+  rename(
+    pay_grade = `...1`,
+    army.m = Army,
+    army.f = `...3`,
+    total.a = `...4`,
+    navy.m = Navy,
+    navy.f = `...6`,
+    total.n = `...7`,
+    marines.m = `Marine Corps`,
+    marines.f = `...9`,
+    total.mc = `...10`,
+    air_force.m = `Air Force`,
+    air_force.f = `...12`,
+    total.af = `...13`,
+    space_force.m = `Space Force`,
+    space_force.f = `...15`,
+    total_sf = `...16`,
+    total_m = Total,
+    total_f = `...18`,
+    total_all = `...19`
+  )
+# instead of piping, reassign the dataframe to drop some rows. Not sure why R wouldnt let me chain the subsetting operator
+armed_forces_clean <- armed_forces_clean[-(c(1,11,17,28,29,30)),] 
+# very quickly drop a bunch of the total rows and start chaining again
+
+# we want to convert this wide data into a much longer data frame. Lets try this with just one branch, the army.
+# i just want to see if what i expect to happen happens, if it does I can add in the other branches to the cols argument
+armed_forces_clean <- armed_forces_clean %>%
+  pivot_longer(  # long pivot all the columns at once
+    cols = c(army.m, army.f, navy.m, navy.f, marines.m, marines.f, air_force.m, air_force.f, space_force.m, space_force.f),
+    names_to = 'branch_and_gender',
+    values_to = c('count')
+  )  # now get rid of all columns that contain the word 'total', With the way we have it set up I can just drop cols 2-9 by reassigning the dataframe.
+armed_forces_clean <- armed_forces_clean[-c(2:9)] %>%
+  # now split the 'branch_and_gender' column into two columns for branch and gender
+  separate_wider_delim(
+    cols = branch_and_gender,
+    names = c("branch", "gender"),
+    delim = '.',
+  )  # fix some  other stuff (change branch and gender to full words if needed, convert NAs and numbers to their appropriate type. etc- this stuff can go in the 'polishing section'), but as is, the data has been tidied.
+# but we will do one last change. We need to give the actual rank names of the groups rather than just the two letters.
+# to do that, We import the pay grade/rank table provided, clean the data/ extract what we need and then just match it to our us armed forces data.
+
+# get the rank and title table from the web and clean it 
+# load rvest
+library(rvest)
+rank_title_table <- read_html("https://neilhatfield.github.io/Stat184_PayGradeRanks.html") %>%
+  html_elements(css = 'table') %>%
+  html_table(header = FALSE)
+
+rank_title_raw <- rank_title_table[[1]] # get rid of the first row and rename cols
+rank_title_clean <- rank_title_raw %>%
+  slice(
+    -c(1,n())
+    ) %>%
+  rename(
+    staff_type = X1,
+    pay_grade = X2,
+    title.army = X3,
+    title.navy = X4,
+    title.marines = X5,
+    title.air_force = X6,
+    title.space_force = X7,
+    cg = X8  # name doesn't matter since we will drop 
+  ) %>%  # drop the coast guard column
+  select(-cg)
+# drop the first 2 and the last rows
+rank_title_clean <- rank_title_clean[-c(1,2,nrow(rank_title_clean) - 1),] %>%  
+  # make this table longer by pivot(ing)_longer on the title columns and then getting the values from the rank column
+  pivot_longer(
+  cols = c(3:7),
+  names_to = 'title_branch'
+  ) %>%  # now separate the branch_title col into the branch and title cols
+  separate_wider_delim(
+    col = title_branch,
+    delim = '.',
+    names = c("title", 'branch')
+  ) %>%  # drop the title and staff_type cols
+  select(-c(title, staff_type))
+  
+
+final_table_groups <- left_join(
+  x = armed_forces_clean,
+  y = rank_title_clean, 
+  by = join_by(branch == branch, pay_grade == pay_grade)
+  ) %>% 
+  rename(
+    title = value
+  ) %>%
+  mutate(
+    gender = if_else(gender == 'm', 'Male', 'Female'),
+
+  ) %>%
+  select(-pay_grade)
+
+#try to make the dataframe even longer.
+final_table_person <- final_table_groups %>%
+  uncount(n)
+
+
+
+```
+
+```{r}
+# this is how to truly make the code concise:
+# load requirements 
+library(googlesheets4)
+library(tidyverse)
+library(dplyr)
+library(rvest)
+
+c_armed_forces_raw <- read_sheet(
+  ss = 'https://docs.google.com/spreadsheets/d/1cn4i0-ymB1ZytWXCwsJiq6fZ9PhGLUvbMBHlzqG4bwo/edit?gid=597536282#gid=597536282',
+  skip = 1
+)
+c_armed_forces_clean <- c_armed_forces_raw %>%
+  rename(  # rename cols
+    pay_grade = `...1`,
+    army.m = Army,
+    army.f = `...3`,
+    navy.m = Navy,
+    navy.f = `...6`,
+    marines.m = `Marine Corps`,
+    marines.f = `...9`,
+    air_force.m = `Air Force`,
+    air_force.f = `...12`,
+    space_force.m = `Space Force`,
+    space_force.f = `...15`
+  ) %>%
+  slice(-c(1, 11, 17, 28, 29, 30)) %>%  # apparently this function exists to remove rows. pretty cool 
+  pivot_longer(
+    cols = c(army.m, army.f, navy.m, navy.f, marines.m, marines.f, air_force.m, air_force.f, space_force.m, space_force.f),
+    names_to = 'branch_and_gender',
+    values_to = 'count'
+  ) %>%
+  separate_wider_delim(
+    branch_and_gender,
+    names = c("branch", "gender"),
+    delim = '.'
+  )
+
+# Load and clean rank/title data in a single pipeline ----
+c_rank_title_raw <- read_html("https://neilhatfield.github.io/Stat184_PayGradeRanks.html") %>%
+  html_elements(css = 'table') %>%
+  html_table(header = FALSE)[[1]] 
+
+c_rank_title_clean <- c_rank_title_raw %>%
+  slice(-c(1, 2, n())) %>%  # remove the first two and last rows
+  rename(
+    staff_type = X1,
+    pay_grade = X2,
+    title.army = X3,
+    title.navy = X4,
+    title.marines = X5,
+    title.air_force = X6,
+    title.space_force = X7
+  ) %>%
+  select(-X8) %>%  # drop coast guard col
+  pivot_longer(
+    cols = starts_with('title'),
+    names_to = 'title_branch',
+  ) %>%
+  separate_wider_delim(
+    title_branch,
+    delim = '.',
+    names = c("title", "branch")
+  ) %>%
+  select(-staff_type)
+
+# Join and finalize the table ----
+c_table_final_groups <- left_join(
+  x = c_armed_forces_clean,
+  y = c_rank_title_clean,
+  by = c("branch" = "branch", "pay_grade" = "pay_grade")
+    ) %>%
+  select(-pay_grade) %>%
+  rename(
+    title = title
+    ) %>%
+  mutate(
+    gender = if_else(gender == 'm', 'Male', 'Female')
+    )
+
+
+```
+
+
+--- Stats in R --- 
+10/11/24
+Tukey's 5 functions
+min  
+q1 quantile(0.25)
+median
+q3 quantile(0.25)
+max
+
+There are 5 quartiles 0th, 1st, 2nd, 3rd, 4th
+
+easy way to get quartiles
+`min(data, na.rm = TRUE)`
+`quantile(data, probs = 0.25, na.rm = TRUE)`
+`min(data, probs = prob, na.rm = TRUE)`
+`quantile(data, probs = 0.75, na.rm = TRUE)`
+`min(data, na.rm = TRUE)`
+advantage: customizable, can order outputs
+drawback: very time consuming and long to type. R will execute one at a time
+
+`summary(data)`
+advantage: parallel processing. can used with pipe, returns a vector of labelled values
+disadvantage: no customization for parameters. only 5 number summary and mean. for qualitative data you get frequency counts, order is predetermined. Wrangling data with subsetting can be complicated\
+
+in the `summarize` function, you list what you want like the first way, can write your own variables you want like statistics. allows us to use `group_by()` and chain commands
+disadvantage: more lines of code, duplication of 'safety' procedures (`na.rm = TRUE`)
+
+hint: dplyr vignette 
+---- activity 7 diamond data frame ----
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+dia <- diamonds
+
+dia_clean <- dia %>%
+  group_by(cut)  %>%
+  summarize(
+    count_x = n(),
+    count_y = n(),
+    count_z = n(),
+    min_x = min(x),
+    min_y = min(y),
+    min_z = min(z),
+    q1_x = quantile(x,0.25),
+    q1_y = quantile(y, 0.25),
+    q1_z = quantile(z, 0.25),
+    median_x = median(x),
+    median_y = median(y), 
+    median_z = median(z),
+    q3_x = quantile(x, 0.75),
+    q3_y = quantile(y, 0.75),
+    q3_z = quantile(z, 0.75),
+    max_x = max(x),
+    max_y = max(y),
+    max_z = max(z),
+    smean_x = mean(x),
+    smean_y = mean(y),
+    smean_z = mean(z),
+    median_abs_dev_x = mad(x),
+    median_abs_dev_y = mad(y),
+    median_abs_dev_z = mad(z),
+    std_x = sd(x),
+    std_y = sd(y),
+    std_z = sd(z)
+    )
+
+# the better way to do it
+
+
+dia_tabl <- dia %>%
+  group_by(cut) %>%
+  summarize(
+    count = n(),
+    across(
+      c(x,y,z), 
+      list(
+        min = ~min(.x, na.rm = TRUE),
+        q1 = ~quantile(.x, 0.25, na.rm = TRUE),
+        median = ~quantile(.x, 0.50, na.rm = TRUE),
+        q3 = ~quantile(.x, 0.75, na.rm = TRUE),
+        max = ~max(.x, na.rm = TRUE),
+        mean = ~mean(.x, na.rm = TRUE),
+        median_abs_dev = ~mad(.x, na.rm = TRUE),
+        std = ~sd(.x, na.rm = TRUE)
+        )
+    )
+  )
+```
+We see zeros in the above table. 0s is not missing data. We might want to change cells with 0 values to be NA values.
+10/16/24
+Organizing our work in Data Analysis
+
+Very rarely do we work on a single analysis project in a given time. You will often take multiple data analysis course at the same time. We can use RStudio projects to keep ourselves organized (only in rstudio app). Two elements the *.RProj file and the actual directory. each project has its own R session and also automatically sets the working directory which makes working with files much easier. Keeps a working memory of source documents you had opened previously. Keeps project specific images of te environment and history that get loaded when you open the project.
+
+--- Working with Tables in R --- 
+We can create tables for people to extract key information. 
+There are three broad types:
+Data Tables: tabular visualizations of underlying dataframes. (rare and ill-advisied: prints every row and every column in the dataframe.) They are very quickly overwhelming
+Frequency Table: Tables that record (abs/rel) case frequencies when we organize the data by one or more categorical attributes. abs: counting, relative: proportion to the entire data.
+Summary Table: Tables that display information about the data through the use of statistics and models of the data.
+
+We have to think carefully about what we want to communicate with the table.  PCIP works very well for dataviz.
+{dt},{janitor},{knitr} are really good packages for tables
+
+DT- mainly for the web, bad for other stuff
+Janitor - tidyverse adjacent helpful in data cleaning. real power comes from `tabyl` function for frequency tables.
+Knitr with `kable` function and {kableExtra} package. tidyverse adjacent, kable function makes very nice tables.
+
+Frequency tables: (contingency tables, cross tables, pivot tables, etc)
+1 way: organize by one categorical attributes
+2 way: organize by two categorical attributes (two-way tables)
+3 way: organize by three categorical attributes (three-way tables)
+each cell records frequency determined by the location (either by abs or rel)
+We can add 'margins' (total rows and total cols)
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(knitr)
+
+dia_table <- diamonds %>%
+  tabyl(color,cut) %>%
+  adorn_totals(where = c('row','col')) %>%
+  adorn_percentages(denominator = 'all') %>%
+  adorn_pct_formatting(digits = 2) %>%
+  adorn_title(
+    placement = 'combined',
+    row_name = 'Color',
+    col_name = 'Cut'
+    )
+```
+
+10/18/24
+Summary Tables
+
+We generally find statistics in summary tables; incisive and descriptive tables more common in EDA. Inferential tables more common in CDA.
+Summary tables require more explanation from us to contextualize and make them useful to the reader than a frequency table.
+
+Summary tables can also be used for inference and modeling. We want to be more picky and we want to be more careful.
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(knitr)
+library(dplyr)
+library(kableExtra)
+
+dia_model <- lm(formula = price ~ carat, data = diamonds)
+dia_model_output <- summary(dia_model)
+coefficients <- dia_model_output$coefficients
+
+coeff_table <- kable(
+  coefficients,
+  caption = 'Regression Summary from Regressing Price on Carat',
+  digits = 3,
+  align = 'c',
+  col.names = c("Estimate", 'Standard Error', 't-value', 'P(x>|t|)')
+) %>%
+  kableExtra::kable_classic()
+coeff_table
+```
+
+plan is to extract coefficient table
+use kable to make a table using the coefficients object
+
+10/23/24
+Data Stories
+
+three components to any data story: Statistics, Data visualization, Narrative story
+
+a god data vizualization should 'force us to norive what we would never expect to see'. The data visualization needs to help us expand the understanding of our data. 'A picture is worth a thousand words... but which ones?'
+
+We need t know how people extract information from dataviz so we can make good visualizations people can use to build their understanding of the data. There are some elements that influences people more.
+
+1. position along a common scale: We have a tendency to compare items with a single scale.
+    position along nonalinged scales: Then we do not have a way to compare them. 
+    
+2. direction and area: flow of a trend and how your eyes move through a visualization. 
+3. angle: pie charts-- you look at the angle of the wedges rather than the size.
+4. volume: you have issues with projecting 3d ento a 3d vizualization.
+5. curvature: how curved are the details
+6. shading
+7. color saturation: be careful with color. especially for the color blind, the photosensitive, and also dark mode users
+
+
+--- Kosslyn 8 principles:
+1. Relevance: limit putting in extra things
+2. Appropriate knowledge: you have to judge the knowledge of the audience
+3. Salience: drawing attention to what matters most, agreement of visual and analytical importance
+4. Discriminability: if two things are different, the difference should be visible
+5. Perceptual organization: people only see so many things at once, and they look at groups of items through chunking
+6. Compatibility: Want the message and medium to agree with each other.
+7. Informative changes: A change in the visualization should reflect change in the actual data
+8. Capacity Limitation: if you give too much information, viewers will be overwhelmed. 
+
+
+
+10/30/24
+```{r}
+library(tidyverse)
+soldiers <- read.csv(
+file = "https://www.dropbox.com/scl/fi/mzt4e0i5pmq4c9xxck0fx/armedForcesSoldiers.csv?rlkey=jm1iu28692jqkd6x1z1i77phi&dl=1",
+header = TRUE,
+sep = ","
+)
+```
+
+A Grammar of Graphics
+- helps create dataviz that helps in EDA
+- Capitalize on EPT
+- create visualizations that help both you as the creator and also others as the consumers
+- by understanding the grammar, we can build code in a reproducible manner
+
+
+
+
+
+
+
+
+
+
+
+
+
+

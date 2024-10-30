@@ -1,0 +1,22 @@
+branch ,pay grade,sex,count
+army,e1,m,7909
+army,e3,f,8169
+army,e5,m,55671
+army,e9,f,419
+navy,w4,m,416
+navy,e2,m,10969
+navy,o7,f,7
+navy,o1,f,5012
+marines,e2,m,35047
+marines,e3,f,28946
+marines,w5,f,8
+marines,o6,f,49
+marines,o2,f,574
+air force ,o9,m,33
+air force ,e2,f,1698
+air force ,e3,m,34981
+air force ,e1,m,6564
+space force,e8,f,38
+space force,w5,f,n/a
+space force,w4,m,n/a
+space force,w2,m,n/a
